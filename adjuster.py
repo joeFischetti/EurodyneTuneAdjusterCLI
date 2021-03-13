@@ -6,10 +6,10 @@ identifier = {
         'BOOST': 'F1F8',
         'BOOSTMIN': 'FD30',
         'BOOSTMAX': 'FD31',
-        'OCTANE': 'F1F9', 
-        'OCTANEMIN': 'FD32',
-        'OCTANEMAX': 'FD33',
-        'ETHANOL': 'F1FD'
+#        'OCTANE': 'F1F9', 
+#        'OCTANEMIN': 'FD32',
+#        'OCTANEMAX': 'FD33',
+#        'ETHANOL': 'F1FD'
     }
 
 params = {
@@ -18,26 +18,32 @@ params = {
  
 def send_raw(data):
     global params
-    results = None
-    while results == None:
-        conn2 = IsoTPSocketConnection('can0', rxid=0x7E8, txid=0x7E0, params=params)
-        conn2.tpsock.set_opts(txpad=0x55, tx_stmin=2500000)
-        conn2.open()
-        conn2.send(data)
-        results = conn2.wait_frame()
-        conn2.close()
-    print(str(results))
-    return results
 
+    conn2 = IsoTPSocketConnection('can0', rxid=0x7E8, txid=0x7E0, params=params)
+    conn2.tpsock.set_opts(txpad=0x55, tx_stmin=2500000)
+
+    conn2.open()
+    conn2.send(data)
+    results = conn2.wait_frame()
+    conn2.close()
+
+    if results:
+        print(str(results))
+        return results
+    else:
+        return data + b'0x00'
 
 def getSliderValues():
     global identifier
     print("Getting Slider values\n")
     for key in identifier:
         print("    Getting " + key + ", sending: 22" + identifier[key])
-        #response = send_raw(bytes.fromhex('22' + identifier[key]))
-        response = '67' + identifier[key] + '71'
+        response = (send_raw(bytes.fromhex('22' + identifier[key]))).hex()
+        print(str(response)) 
+
+        #response = '67' + identifier[key] + '71'
         rawvalue = int.from_bytes(bytearray.fromhex(response[6:]),'little')
+
         if re.match('^BOOST.*', key):
             value = rawvalue / 0.047110065099374217 * 0.014503773773 - 15
         elif re.match('^ETHANOL.*', key):
@@ -65,28 +71,29 @@ def setSliderValue(slider = None, value = None):
         rawvalue = round(int(value))
     print("    Sending raw value: " + str(bytes([rawvalue]).hex()))
     print("    Sending: 2E" + identifier[slider] + bytes([rawvalue]).hex() )
-    #response = send_raw(bytes.fromhex('2E' + identifier[slider] + rawvalue))
-    response = "6E" + identifier[slider]
+
+    response = send_raw(bytes.fromhex('2E' + identifier[slider] + bytes([rawvalue]).hex() ))
+    #response = "6E" + identifier[slider]
     print("    Response: " + str(response))
 
 
     
 
 parser = argparse.ArgumentParser(description='Eurodyne Slider Adjuster')
-parser.add_argument('--getSliders', help="Get the slider values from the ECU", action='store_true')
-parser.add_argument('--setSlider',help="Used to set a slider value, specified by BOOST, OCTANE, ETHANOL")
-parser.add_argument('--value',help="the value that will be passed to the slider, use with --setSlider")
+parser.add_argument('--get', help="Get the slider values from the ECU", action='store_true')
+parser.add_argument('--set',help="Used to set a slider value, specified by BOOST, OCTANE, ETHANOL")
+parser.add_argument('--value',help="the value that will be passed to the slider, use with --set")
 
 
 args = parser.parse_args()
 
-if args.getSliders is True:
+if args.get is True:
     getSliderValues()
 
-elif args.setSlider is not None and args.value is not None:
+elif args.set is not None and args.value is not None:
     getSliderValues()
     print("==================")
-    setSliderValue(slider = (args.setSlider).upper(), value = (args.value).upper())
+    setSliderValue(slider = (args.set).upper(), value = (args.value).upper())
     print("==================")
     getSliderValues()
 
